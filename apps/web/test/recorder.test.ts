@@ -19,7 +19,7 @@ vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
 const { Recorder } = await import('../src/data/recorder');
 const { openUserDb, userDb } = await import('../src/data/db');
 
-const me = { id: 'u1', username: 'yo', displayName: 'Yo', avatarUrl: null, email: '', bio: '', location: '', isPrivate: false, units: 'metric' as const, defaultVisibility: 'public' as const, weightKg: null, hrMax: null, hrRest: null, ftp: null, role: 'user' as const, createdAt: '' };
+const me = { id: 'local', username: 'local', displayName: 'Yo', avatarUrl: null, units: 'metric' as const, defaultVisibility: 'private' as const, weightKg: null, hrMax: null, hrRest: null, ftp: null };
 const M = 111_194.93;
 
 function walk(from: { lat: number; t: number }, steps: number, metersPerStep: number) {
@@ -51,11 +51,10 @@ describe('grabador', () => {
     expect(a!.distanceM).toBeGreaterThan(560);
     expect(a!.distanceM).toBeLessThan(620);
     expect(a!.source).toBe('recorded');
-    expect(a!.syncState).toBe('pending');
-    // La sesión y sus puntos se limpian; la actividad queda en la cola.
+    // La sesión y sus puntos se limpian; la actividad queda guardada en local.
     expect(await userDb().recSessions.count()).toBe(0);
     expect(await userDb().recPoints.count()).toBe(0);
-    expect(await userDb().outbox.count()).toBe(1);
+    expect(await userDb().activities.count()).toBe(1);
     const st = await userDb().streams.get(a!.id);
     expect(new Set(st!.stream.seg).size).toBe(2);
   });

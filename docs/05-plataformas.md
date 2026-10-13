@@ -4,6 +4,12 @@ Una sola base de UI/lógica (`apps/web`) se distribuye como web, PWA, app Androi
 de escritorio Windows (Tauri). Este documento reúne los requisitos, los pasos de compilación y las
 pruebas de cada plataforma. El estado verificado está en [`../ESTADO.md`](../ESTADO.md).
 
+> **La app es ahora totalmente local** (ver [`06-modo-local.md`](06-modo-local.md)): no hay backend,
+> cuenta ni sincronización. Los apartados de este documento que mencionan "la API", `CORS_ORIGINS`,
+> `VITE_API_URL` o cuentas/entitlements corresponden al diseño original y **ya no aplican**: el
+> empaquetado solo envuelve la web local. Los `device-tests` se escribieron para el flujo con
+> registro/login y deben adaptarse (la app local abre directamente, sin crear cuenta).
+
 > Regla del proyecto: no se marca una plataforma como terminada si no compila o si sus funciones
 > esenciales están simuladas. Las pruebas que requieren un dispositivo físico se distinguen
 > explícitamente de las automatizadas.
@@ -15,7 +21,7 @@ pruebas de cada plataforma. El estado verificado está en [`../ESTADO.md`](../ES
 **Requisitos:** Node ≥ 22, pnpm.
 
 ```bash
-pnpm --filter @trazo/web dev      # desarrollo en http://localhost:5173 (proxy a la API)
+pnpm --filter @trazo/web dev      # desarrollo en http://localhost:5173
 pnpm --filter @trazo/web build    # producción → apps/web/dist/
 pnpm --filter @trazo/web preview  # sirve el build de producción
 ```

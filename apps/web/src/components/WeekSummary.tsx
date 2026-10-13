@@ -1,28 +1,22 @@
 import { formatDistance, formatDuration, formatElevation, type GoalMetric } from '@trazo/core';
-import { useQuery } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Target } from 'lucide-react';
 import { Link } from 'react-router';
 import { useUnits } from '../app/hooks';
-import { api } from '../data/api';
+import { userDb } from '../data/db';
+import { goalProgress, type GoalView } from '../data/goals';
 import { Progress, Stat } from '../ui/primitives';
 import { useLocalActivitiesSince } from './hooks';
 
-export interface GoalDTO {
-  id: string;
-  period: 'week' | 'month' | 'year';
-  metric: GoalMetric;
-  sport: string | null;
-  target: number;
-  value: number;
-  progress: number;
-  periodStart: string;
-  periodEnd: string;
-}
+export type GoalDTO = GoalView;
 
-const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
-
+/** Objetivos y su progreso, calculados en local a partir de las actividades del dispositivo. */
 export function useGoals() {
-  return useQuery({ queryKey: ['goals'], queryFn: () => api<GoalDTO[]>(`/goals?tz=${encodeURIComponent(tz())}`) });
+  const data = useLiveQuery(async () => {
+    const [goals, acts] = await Promise.all([userDb().goals.toArray(), userDb().activities.toArray()]);
+    return goalProgress(goals, acts);
+  }, []);
+  return { data };
 }
 
 export function formatGoalValue(metric: GoalMetric, v: number, units: 'metric' | 'imperial') {

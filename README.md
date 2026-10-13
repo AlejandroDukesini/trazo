@@ -1,124 +1,97 @@
 # Trazo
 
-Plataforma deportiva propia (registro de actividades con GPS, mapas, rutas, estadísticas,
-comunidad, segmentos, análisis de entrenamiento y suscripciones) con una única base de código
-para **web responsive**, **PWA instalable**, **Android** (Capacitor) y **Windows** (Tauri).
+App deportiva **totalmente local** y de un solo usuario: registra actividades con GPS, las analiza
+(mapas, gráficos, segmentos, entrenamiento) y las guarda **solo en tu dispositivo**. Sin cuenta, sin
+inicio de sesión y sin servidor. Funciona como **web responsive**, **PWA instalable**, app **Android**
+(Capacitor) y app **Windows** (Tauri), compartiendo una única base de código.
 
-Producto original inspirado solo en las *capacidades funcionales* de aplicaciones deportivas de
-referencia. No usa la marca, los textos, los iconos, los colores ni la API de Strava. Toda la
-funcionalidad es propia y la importación de actividades se hace con archivos **GPX/TCX** que aporta
-la persona usuaria. Ver [`docs/01-investigacion.md`](docs/01-investigacion.md) para los límites legales.
+Producto original inspirado solo en las *capacidades funcionales* de apps deportivas de referencia.
+No usa la marca, los textos, los iconos ni la API de Strava.
 
-El estado real de implementación (qué está verificado y qué depende de dispositivo) vive en
-[`ESTADO.md`](ESTADO.md). El diseño y las decisiones técnicas, en [`docs/`](docs/).
+> **Nota de evolución.** El proyecto empezó como una plataforma social con backend, cuentas y
+> suscripciones (ver `docs/01`–`04`). Después se convirtió, a propósito, en una app **local, personal
+> y gratuita**: se eliminaron el backend, las cuentas, la comunidad (clubes, personas, retos, feed) y
+> las funciones de pago, y se añadió la importación de actividades **por pantallazo** (OCR local). La
+> arquitectura actual está en [`docs/06-modo-local.md`](docs/06-modo-local.md); el estado real en
+> [`ESTADO.md`](ESTADO.md).
+
+## Qué incluye
+
+- **Grabar** actividades con GPS (máquina de estados fiable, recuperación tras cierre).
+- **Importar** desde archivo **GPX/TCX**, **por pantallazo** (OCR en el dispositivo) o a mano.
+- **Historial**, detalle con mapa y gráficos, parciales, vueltas y mejores esfuerzos.
+- **Progreso**: resúmenes por periodo, comparativa entre periodos, objetivos y récords personales.
+- **Entrenamiento**: carga/forma/fatiga (CTL/ATL/TSB), zonas de FC y planes.
+- **Rutas**: dibujo en el mapa, búsqueda de lugares, importación/exportación GPX.
+- **Segmentos personales**: crea un tramo y detecta automáticamente tus intentos.
+- **Ajustes**: perfil local (nombre, foto, unidades, peso, FC, FTP), exportar/borrar tus datos.
+- Tema claro/oscuro, diseño responsive, PWA instalable y offline.
+
+Todo es gratuito: no hay funciones de pago ni bloqueos.
 
 ## Monorepo
 
 ```
 trazo/  (pnpm workspaces)
-├─ packages/core     Dominio puro TypeScript (sin DOM ni Node): esquemas, geo, filtros GPS,
-│                    métricas, máquina de estados de grabación, GPX/TCX, segmentos, entrenamiento,
-│                    privacidad, matriz de planes. Compartido por web y API.
-├─ apps/api          Backend Fastify + PostgreSQL (Kysely): auth, autorización, sincronización,
-│                    social, segmentos, suscripciones, proxies de geocodificación/rutas.
-└─ apps/web          React + Vite. UI única para web, PWA, Android y Windows.
-   ├─ android/       Proyecto Capacitor + plugin Kotlin/Java TrazoTracker (GPS en segundo plano).
+├─ packages/core     Dominio puro TypeScript: métricas, geo, filtros GPS, máquina de grabación,
+│                    GPX/TCX, segmentos, entrenamiento, objetivos. Toda la "lógica de servidor"
+│                    vive aquí y se ejecuta en el cliente.
+└─ apps/web          React + Vite. UI + datos locales (IndexedDB) para web, PWA, Android y Windows.
+   ├─ android/       Proyecto Capacitor + plugin de GPS en segundo plano.
    └─ src-tauri/     Envoltorio de escritorio Tauri 2.
 ```
 
-Lo nativo se limita a **adaptadores** en `apps/web/src/platform/*` (geolocalización, almacenamiento
-del token, archivos). La lógica de negocio no se duplica entre plataformas: vive en `packages/core`.
+No hay `apps/api`: la app no habla con ningún servidor. Los datos se guardan en **IndexedDB** (Dexie)
+y el perfil en el almacenamiento local del navegador.
 
 ## Stack
 
-- **Core/UI:** TypeScript 5.9, React 19, Vite 8, React Router 8, TanStack Query 5.
-- **Datos locales:** IndexedDB con Dexie 4 (cola de sincronización, actividades offline).
-- **Mapas:** MapLibre GL 6 con teselas de [OpenFreeMap](https://openfreemap.org) (sin clave).
-- **Gráficos:** µPlot. **Iconos:** lucide-react. **Tipografía:** Inter.
-- **Backend:** Fastify 5, PostgreSQL 16+ (Kysely), Argon2 para contraseñas, Zod para validación,
-  Pino para logs, Nodemailer para correo, Stripe para pagos web.
-- **Empaquetado:** Capacitor 8 (Android), Tauri 2 (Windows: instaladores NSIS y MSI).
+TypeScript 5.9, React 19, Vite 8, React Router 8, TanStack Query 5, Dexie 4 (IndexedDB),
+MapLibre GL 6 con teselas de [OpenFreeMap](https://openfreemap.org) (sin clave), µPlot, Inter,
+**tesseract.js** (OCR de pantallazos, en el dispositivo). Empaquetado: Capacitor 8, Tauri 2.
 
-## Requisitos
-
-- **Node ≥ 22** y **pnpm** (`corepack enable`).
-- **PostgreSQL ≥ 16** (con la extensión `citext`) para ejecutar la API y sus pruebas.
-- Solo para compilar nativo: **Android SDK + JDK 17** (Android) y **Rust estable + herramientas de
-  compilación de Windows** (Tauri). Ver [`docs/05-plataformas.md`](docs/05-plataformas.md).
-
-## Puesta en marcha (web + API)
+## Puesta en marcha
 
 ```bash
 pnpm install
-
-# API
-cp apps/api/.env.example apps/api/.env   # y edita DATABASE_URL, etc.
-createdb trazo_dev                        # o usa tu PostgreSQL existente
-pnpm --filter @trazo/api migrate          # aplica migraciones
-pnpm --filter @trazo/api dev              # API en http://127.0.0.1:3000
-
-# Web (en otra terminal)
-pnpm --filter @trazo/web dev              # http://localhost:5173
+pnpm --filter @trazo/web dev     # http://localhost:5173
 ```
 
-En desarrollo, la web habla con la API mediante el proxy de Vite (`/api` → `API_PROXY`, por defecto
-`http://127.0.0.1:3000`), así que no necesitas configurar la URL del backend. En los **builds nativos**
-(Android/Windows) la base es una URL absoluta obligatoria: define `VITE_API_URL` al compilar.
+No hay base de datos ni variables de entorno obligatorias para desarrollo.
 
 ## Scripts
 
 | Comando | Qué hace |
 |---|---|
-| `pnpm dev` | Arranca web y API en paralelo. |
-| `pnpm build` | Compila todos los paquetes. |
+| `pnpm --filter @trazo/web dev` | Arranca la app en desarrollo. |
+| `pnpm --filter @trazo/web build` | Compila la PWA → `apps/web/dist/`. |
 | `pnpm typecheck` | `tsc --noEmit` en todo el workspace. |
-| `pnpm test` | Pruebas de los tres paquetes (requiere `TEST_DATABASE_URL` para la API). |
-| `pnpm db:migrate` | Aplica migraciones de la base de datos. |
-| `pnpm --filter @trazo/web e2e` | Pruebas end-to-end con Playwright. |
+| `pnpm test` | Pruebas de `core` (30) y `web` (7). |
+| `pnpm --filter @trazo/web e2e` | Pruebas end-to-end con Playwright (requiere navegadores). |
 
-## Pruebas
+## Servicios externos
 
-- **Automatizadas (sin dispositivo):** `pnpm test` → core (30), API (26, necesita PostgreSQL de
-  pruebas), web (10). E2E con Playwright en `apps/web/e2e`.
-- **Dispositivo (no automatizables aquí):** scripts en `apps/web/device-tests/` que verifican la
-  grabación con la pantalla apagada, la recuperación tras matar el proceso y la inspección en vivo
-  del WebView por ADB. Ver [`docs/05-plataformas.md`](docs/05-plataformas.md).
+La app no depende de ningún backend propio. Usa dos servicios públicos y gratuitos **directamente
+desde el cliente**, solo cuando hace falta:
 
-El estado de la matriz de aceptación del prompt (20 puntos) está en [`ESTADO.md`](ESTADO.md).
+| Servicio | Uso | Requisito |
+|---|---|---|
+| OpenFreeMap | Teselas del mapa | Sin clave. |
+| Photon (Komoot) | Búsqueda de lugares en el editor de rutas | Sin clave. |
+| tesseract.js | OCR de pantallazos | Descarga el motor OCR la primera vez (se cachea); luego offline. |
+
+## Privacidad
+
+Todos los datos (actividades, recorridos, rutas, segmentos, objetivos, perfil, fotos y pantallazos)
+se guardan **solo en el dispositivo**. No se envían a ningún servidor, no hay cuenta y no se recopila
+información personal. El OCR del pantallazo se ejecuta en el propio navegador. Puedes exportar un
+volcado JSON de tus datos o borrarlos por completo desde Ajustes.
 
 ## Compilación por plataforma
 
-Los pasos detallados (requisitos, firmas, instaladores y pruebas de dispositivo) están en
-[`docs/05-plataformas.md`](docs/05-plataformas.md). Resumen:
+Ver [`docs/05-plataformas.md`](docs/05-plataformas.md). Resumen:
 
-- **Web / PWA:** `pnpm --filter @trazo/web build` → `dist/` (incluye manifiesto y service worker).
+- **Web / PWA:** `pnpm --filter @trazo/web build` → `dist/` (manifiesto + service worker).
 - **Android:** `pnpm --filter @trazo/web build && pnpm --filter @trazo/web android:sync`, luego
-  `cd apps/web/android && ./gradlew assembleDebug`.
-- **Windows:** `pnpm --filter @trazo/web tauri build` → instaladores NSIS y MSI.
-
-## Servicios externos y costes
-
-| Servicio | Uso | Coste / límite |
-|---|---|---|
-| OpenFreeMap | Teselas del mapa | Gratuito, sin clave (uso justo). |
-| openrouteservice | Cálculo de rutas | Plan gratuito ~2000 req/día, requiere `ORS_API_KEY`. |
-| Photon (Komoot) | Geocodificación | Público gratuito; configurable con `PHOTON_URL`. |
-| Stripe | Pagos web | Comisión por transacción; claves de test en desarrollo. |
-| Google Play Billing | Pagos Android | Comisión de la tienda; pendiente de cuenta Play Console. |
-
-Sin claves de pago configuradas, los endpoints de facturación responden `503 billing_unavailable`:
-**no hay pagos simulados**. Todos los secretos se leen de variables de entorno; `.env` está ignorado
-por git. Variables documentadas en [`apps/api/.env.example`](apps/api/.env.example).
-
-## Modelo de datos
-
-PostgreSQL, 25 tablas (migración `apps/api/src/db/migrations/0001_init.ts`): `users`, `sessions`,
-`password_resets`, `privacy_zones`, `activities`, `activity_streams`, `activity_photos`, `follows`,
-`blocks`, `reactions`, `comments`, `notifications`, `reports`, `clubs`, `club_members`, `challenges`,
-`challenge_participants`, `segments`, `segment_efforts`, `goals`, `routes`, `plan_enrollments`,
-`billing_customers`, `subscriptions`, `billing_events`.
-
-## Licencia y marcas
-
-Producto propio. No incluye recursos, marcas ni API de terceros protegidos. No hagas commits,
-despliegues ni compras de servicios sin autorización.
+  `cd apps/web/android && ./gradlew assembleDebug` (requiere Android SDK + JDK 17).
+- **Windows:** `pnpm --filter @trazo/web tauri build` (requiere Rust + toolchain de Windows).

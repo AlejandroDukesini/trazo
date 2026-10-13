@@ -8,8 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { cumulativeDistance, pointToSegmentDistance } from '@trazo/core';
-import { api } from '../../data/api';
-import { useSession } from '../../data/session';
+import { getRoute } from '../../data/routes-local';
 import { useDocumentTitle, useNow, useRecorder, useUnits } from '../../app/hooks';
 import { MapView } from '../../components/MapView';
 import { defaultActivityName, recorder } from '../../data/recorder';
@@ -155,12 +154,14 @@ export default function RecordPage() {
   const lastSplit = rec.splits.at(-1);
   const fitKey = useRef(0);
   const [params] = useSearchParams();
-  const { can } = useSession();
   const routeId = params.get('ruta');
   const route = useQuery({
     queryKey: ['route', routeId],
-    enabled: !!routeId && can('routes.navigation'),
-    queryFn: () => api<{ name: string; geometry: { lat: number[]; lng: number[] } }>(`/routes/${routeId}`),
+    enabled: !!routeId,
+    queryFn: async () => {
+      const r = await getRoute(routeId!);
+      return r ? { name: r.name, geometry: { lat: r.geometry.lat, lng: r.geometry.lng } } : null;
+    },
     staleTime: Infinity,
   });
   const guide = useMemo(() => {
@@ -231,7 +232,6 @@ export default function RecordPage() {
                 <button type="button" className="link" style={{ background: 'none', border: 0, padding: 0 }} onClick={() => void TrazoTracker.openBatterySettings()}>Desactivar optimización</button>
               </Notice>
             )}
-            {routeId && !can('routes.navigation') && <Notice icon={MapIcon}>Seguir una ruta durante la actividad forma parte de Trazo Plus.</Notice>}
             {route.data && <Notice icon={MapIcon} tone="accent">Ruta cargada: {route.data.name}</Notice>}
             <Button variant="primary" size="xl" block icon={Play} disabled={rec.gps.status === 'denied'} onClick={() => void recorder.start()}>
               Iniciar {sport.label.toLowerCase()}

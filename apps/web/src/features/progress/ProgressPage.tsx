@@ -1,41 +1,33 @@
 import {
   SPORTS, SPORT_KEYS, formatDistance, formatDuration, formatElevation, getSport, periodStart, riegel, summarize, type GoalMetric, type GoalPeriod,
 } from '@trazo/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowDownRight, ArrowUpRight, Medal, Plus, Target, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { useDocumentTitle, useUnits } from '../../app/hooks';
 import { BarChart } from '../../components/Charts';
 import { formatDate, formatShortDate } from '../../components/format';
 import { METRIC_LABEL, PERIOD_LABEL, formatGoalValue, useGoals } from '../../components/WeekSummary';
-import { ApiError, api } from '../../data/api';
 import { userDb } from '../../data/db';
-import { useSession } from '../../data/session';
+import { addGoal, deleteGoal } from '../../data/goals';
 import { Dialog, useConfirm } from '../../ui/dialog';
 import { Button, Chip, Empty, Field, Input, Progress, Segmented, Select, Skeleton, Stat } from '../../ui/primitives';
 import { useToast } from '../../ui/toast';
-import { PlusLock } from '../settings/PlusLock';
 
 type Metric = 'distanceM' | 'movingS' | 'elevGainM' | 'count';
 
 function Summary() {
   const units = useUnits();
-  const { session } = useSession();
   const [period, setPeriod] = useState<GoalPeriod>('week');
   const [metric, setMetric] = useState<Metric>('distanceM');
   const [sport, setSport] = useState('');
   const all = useLiveQuery(() => userDb().activities.toArray(), []);
-  const limitMonths = session?.entitlements.limits.statsHistoryMonths ?? 12;
 
   const buckets = useMemo(() => {
     if (!all) return [];
-    const since = limitMonths != null ? Date.now() - limitMonths * 30.44 * 86_400_000 : 0;
-    const acts = all.filter((a) => !a.deleted && Date.parse(a.startedAt) >= since);
-    const s = summarize(acts, period, sport || null);
-    const count = period === 'week' ? 12 : period === 'month' ? 12 : 5;
-    // Rellena periodos vacíos para que el eje sea continuo.
+    const s = summarize(all, period, sport || null);
+    const count = period === 'year' ? 5 : 12;
     const out = [];
     let cursor = periodStart(period);
     for (let i = 0; i < count; i++) {
@@ -47,10 +39,9 @@ function Summary() {
       else if (period === 'month') prev.setMonth(prev.getMonth() - 1);
       else prev.setFullYear(prev.getFullYear() - 1);
       cursor = prev;
-      if (limitMonths != null && Date.now() - cursor.getTime() > limitMonths * 31 * 86_400_000) break;
     }
     return out;
-  }, [all, period, sport, limitMonths]);
+  }, [all, period, sport]);
 
   const fmt = (v: number) => metric === 'distanceM' ? formatDistance(v, units, 1) : metric === 'movingS' ? formatDuration(v, { compact: true }) : metric === 'elevGainM' ? formatElevation(v, units) : `${v} act.`;
   const label = (d: Date) => period === 'week' ? `Sem. ${formatShortDate(d)}` : period === 'month' ? d.toLocaleDateString('es', { month: 'short', year: '2-digit' }) : String(d.getFullYear());
@@ -79,7 +70,6 @@ function Summary() {
           <Stat label="Total del periodo mostrado" value={formatDistance(total.d, units, 0)} note={`${total.c} actividades · ${formatDuration(total.t, { compact: true })}`} />
         </div>
       )}
-      {limitMonths != null && <p className="xs subtle">Mostrando los últimos {limitMonths} meses. <Link className="link" to="/plus">Historial completo con Plus</Link></p>}
     </section>
   );
 }
@@ -91,20 +81,41 @@ function Delta({ now, before }: { now: number; before: number }) {
   return <span className="row" style={{ ['--gap' as string]: '2px', color: up ? 'var(--success)' : 'var(--text-3)' }}>{up ? <ArrowUpRight width={14} /> : <ArrowDownRight width={14} />}{Math.abs(pct).toFixed(0)} % vs. anterior</span>;
 }
 
+type Agg = { count: number; distanceM: number; movingS: number; elevGainM: number };
+
+function aggregate(acts: Array<{ startedAt: string; distanceM: number; movingS: number; elevGainM: number | null }>, from: number, to: number): Agg {
+  const out: Agg = { count: 0, distanceM: 0, movingS: 0, elevGainM: 0 };
+  for (const a of acts) {
+    const ms = Date.parse(a.startedAt);
+    if (ms < from || ms >= to) continue;
+    out.count++; out.distanceM += a.distanceM; out.movingS += a.movingS; out.elevGainM += a.elevGainM ?? 0;
+  }
+  return out;
+}
+
 function PeriodCompare() {
   const units = useUnits();
-  const { can } = useSession();
   const [period, setPeriod] = useState<GoalPeriod>('month');
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  type Agg = { start: string; count: number; distanceM: number; movingS: number; elevGainM: number };
-  const q = useQuery({ queryKey: ['compare-periods', period], enabled: can('stats.periodCompare'), queryFn: () => api<{ current: Agg; previous: Agg; lastYear: Agg | null }>(`/stats/compare?period=${period}&tz=${encodeURIComponent(tz)}`) });
-  if (!can('stats.periodCompare')) return <PlusLock feature="stats.periodCompare">Compara el periodo actual con el anterior y con el mismo periodo del año pasado, hasta la misma fecha.</PlusLock>;
-  const cols = q.data ? [['Actual', q.data.current], ['Anterior', q.data.previous], ...(q.data.lastYear ? [['Hace un año', q.data.lastYear] as const] : [])] as Array<readonly [string, Agg]> : [];
+  const all = useLiveQuery(() => userDb().activities.toArray(), []);
+  const data = useMemo(() => {
+    if (!all) return null;
+    const now = Date.now();
+    const curStart = periodStart(period);
+    const elapsed = now - curStart.getTime();
+    const prevStart = periodStart(period, new Date(curStart.getTime() - 1));
+    const lastYearStart = new Date(curStart); lastYearStart.setFullYear(lastYearStart.getFullYear() - 1);
+    return {
+      current: aggregate(all, curStart.getTime(), now),
+      previous: aggregate(all, prevStart.getTime(), prevStart.getTime() + elapsed),
+      lastYear: aggregate(all, lastYearStart.getTime(), lastYearStart.getTime() + elapsed),
+    };
+  }, [all, period]);
+  const cols: Array<readonly [string, Agg]> = data ? [['Actual', data.current], ['Anterior', data.previous], ['Hace un año', data.lastYear]] : [];
   return (
     <section className="card card--pad stack">
       <div className="row between wrap"><h2>Comparativa entre periodos</h2><Segmented label="Periodo" value={period} onChange={setPeriod} options={[{ value: 'week', label: 'Semana' }, { value: 'month', label: 'Mes' }, { value: 'year', label: 'Año' }]} /></div>
       <p className="xs subtle">Cada periodo se compara hasta el mismo punto relativo (p. ej. los primeros 12 días del mes).</p>
-      {q.isPending ? <Skeleton h={120} /> : (
+      {!data ? <Skeleton h={120} /> : (
         <div className="table-wrap">
           <table className="table">
             <thead><tr><th /> {cols.map(([l]) => <th key={l} className="right">{l}</th>)}</tr></thead>
@@ -124,50 +135,46 @@ function PeriodCompare() {
 function Goals() {
   const units = useUnits();
   const goals = useGoals();
-  const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const { can } = useSession();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ period: 'week' as GoalPeriod, metric: 'distance' as GoalMetric, sport: '', target: '20' });
-  const create = useMutation({
-    mutationFn: () => {
+  const create = async () => {
+    setSaving(true);
+    try {
       const n = Number(form.target);
       const target = form.metric === 'distance' ? n * (units === 'imperial' ? 1609.344 : 1000) : form.metric === 'duration' ? n * 3600 : n;
-      return api('/goals', { method: 'POST', body: { period: form.period, metric: form.metric, sport: form.sport || null, target } });
-    },
-    onSuccess: () => { setOpen(false); void qc.invalidateQueries({ queryKey: ['goals'] }); },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === 'premium_required') toast.show('Los objetivos mensuales, anuales o múltiples forman parte de Plus.', { tone: 'danger', action: { label: 'Ver Plus', onClick: () => navigate('/plus') } });
-      else toast.error(err);
-    },
-  });
-  const del = useMutation({ mutationFn: (id: string) => api(`/goals/${id}`, { method: 'DELETE' }), onSuccess: () => void qc.invalidateQueries({ queryKey: ['goals'] }) });
+      await addGoal({ period: form.period, metric: form.metric, sport: form.sport || null, target });
+      setOpen(false);
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
   const unitLabel = form.metric === 'distance' ? (units === 'imperial' ? 'mi' : 'km') : form.metric === 'duration' ? 'horas' : form.metric === 'elevation' ? 'm' : 'actividades';
   return (
     <section className="card card--pad stack" id="objetivos">
       <div className="row between"><h2>Objetivos</h2><Button size="sm" icon={Plus} onClick={() => setOpen(true)}>Nuevo objetivo</Button></div>
-      {goals.isPending && <Skeleton h={60} />}
-      {goals.isError && <p className="small muted">Los objetivos necesitan conexión.</p>}
-      {goals.data?.length === 0 && <Empty icon={Target} title="Sin objetivos">Marca un objetivo semanal de distancia, tiempo, desnivel o número de actividades.</Empty>}
+      {!goals.data && <Skeleton h={60} />}
+      {goals.data?.length === 0 && <Empty icon={Target} title="Sin objetivos">Marca un objetivo de distancia, tiempo, desnivel o número de actividades.</Empty>}
       {goals.data?.map((g) => (
         <div key={g.id} className="stack" style={{ ['--gap' as string]: '6px' }}>
           <div className="row between">
             <strong className="small">{METRIC_LABEL[g.metric]} {PERIOD_LABEL[g.period]}{g.sport ? ` · ${getSport(g.sport).label}` : ''}</strong>
             <div className="row" style={{ ['--gap' as string]: '4px' }}>
               <span className="small num muted">{formatGoalValue(g.metric, g.value, units)} / {formatGoalValue(g.metric, g.target, units)}</span>
-              <Button size="sm" variant="ghost" icon={Trash2} aria-label="Eliminar objetivo" onClick={async () => { if (await confirm({ title: 'Eliminar objetivo', message: 'Dejará de mostrarse tu progreso para este objetivo.', confirmLabel: 'Eliminar', danger: true })) del.mutate(g.id); }} />
+              <Button size="sm" variant="ghost" icon={Trash2} aria-label="Eliminar objetivo" onClick={async () => { if (await confirm({ title: 'Eliminar objetivo', message: 'Dejará de mostrarse tu progreso para este objetivo.', confirmLabel: 'Eliminar', danger: true })) void deleteGoal(g.id); }} />
             </div>
           </div>
           <Progress value={g.progress} label={`Progreso ${METRIC_LABEL[g.metric]}`} />
           {g.progress >= 1 && <Chip tone="accent">¡Conseguido!</Chip>}
         </div>
       ))}
-      {!can('goals.multiple') && <p className="xs subtle">Plan gratuito: 1 objetivo semanal activo.</p>}
-      <Dialog open={open} onClose={() => setOpen(false)} title="Nuevo objetivo" footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button><Button variant="primary" loading={create.isPending} onClick={() => create.mutate()}>Crear</Button></>}>
+      <Dialog open={open} onClose={() => setOpen(false)} title="Nuevo objetivo" footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button><Button variant="primary" loading={saving} onClick={create}>Crear</Button></>}>
         <div className="form-grid form-grid--2">
-          <Field label="Periodo">{(id) => <Select id={id} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value as GoalPeriod })}><option value="week">Semanal</option><option value="month">Mensual {!can('goals.multiple') && '(Plus)'}</option><option value="year">Anual {!can('goals.multiple') && '(Plus)'}</option></Select>}</Field>
+          <Field label="Periodo">{(id) => <Select id={id} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value as GoalPeriod })}><option value="week">Semanal</option><option value="month">Mensual</option><option value="year">Anual</option></Select>}</Field>
           <Field label="Métrica">{(id) => <Select id={id} value={form.metric} onChange={(e) => setForm({ ...form, metric: e.target.value as GoalMetric })}><option value="distance">Distancia</option><option value="duration">Tiempo</option><option value="elevation">Desnivel</option><option value="count">Nº de actividades</option></Select>}</Field>
           <Field label="Deporte">{(id) => <Select id={id} value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })}><option value="">Todos</option>{SPORT_KEYS.map((k) => <option key={k} value={k}>{SPORTS[k]!.label}</option>)}</Select>}</Field>
           <Field label={`Objetivo (${unitLabel})`}>{(id) => <Input id={id} type="number" min={0.1} step="0.1" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} />}</Field>
@@ -182,7 +189,7 @@ function Records() {
   const records = useMemo(() => {
     const best = new Map<string, { label: string; distanceM: number; elapsedS: number; id: string; name: string; date: string; group: string }>();
     for (const a of all ?? []) {
-      if (a.deleted || a.source === 'manual') continue;
+      if (a.source === 'manual') continue;
       const group = getSport(a.sport).group;
       for (const e of a.stats.bestEfforts ?? []) {
         const k = `${group}:${e.distanceM}`;

@@ -6,15 +6,7 @@ test.skip(!process.env.SCREENS, 'solo bajo demanda');
 
 test('capturas', async ({ page }, info) => {
   test.setTimeout(120_000);
-  const u = `vis_${Date.now().toString(36)}`;
-  await page.goto('/registro');
-  await page.screenshot({ path: `screens/${info.project.name}-registro.png` });
-  await page.getByLabel('Nombre', { exact: true }).fill('Laura Méndez');
-  await page.getByLabel('Nombre de usuario').fill(u);
-  await page.getByLabel('Correo electrónico').fill(`${u}@example.com`);
-  await page.getByLabel('Contraseña').fill('contraseña-segura-1');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL(/ajustes/);
+  await page.goto('/');
   for (let k = 0; k < 3; k++) {
     const s: Stream = { t: [], lat: [], lng: [], ele: [], seg: [] };
     for (let i = 0; i < 2400; i++) {
@@ -26,7 +18,7 @@ test('capturas', async ({ page }, info) => {
     }
     const gpx = streamToGpx(s, { name: ['Rodaje por el Retiro', 'Series en pista', 'Tirada larga'][k]!, sport: 'run', startedAt: Date.now() - (k + 1) * 86_400_000 });
     await page.goto('/actividades/importar');
-    await page.locator('input[type=file]').setInputFiles({ name: 'a.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx) });
+    await page.locator('input[type=file]').first().setInputFiles({ name: 'a.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx) });
     await page.getByRole('button', { name: 'Guardar actividad' }).click();
     await expect(page).toHaveURL(/actividad\//);
   }

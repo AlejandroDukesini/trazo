@@ -1,12 +1,12 @@
-import { formatDistance, formatDuration, formatSportSpeed, getSport, type Units } from '@trazo/core';
+import { formatDistance, formatDuration, formatSportSpeed, getSport, hrZones, timeInZones, type Units } from '@trazo/core';
 import { useQuery } from '@tanstack/react-query';
-import { Award, HeartPulse, Lock, Medal } from 'lucide-react';
+import { Award, HeartPulse, Medal } from 'lucide-react';
 import { Link } from 'react-router';
-import { api } from '../../data/api';
+import { userDb } from '../../data/db';
+import { effortsForActivity } from '../../data/segments-local';
 import type { ActivityDTO } from '../../data/types';
-import { useSession } from '../../data/session';
+import { useMe } from '../../data/session';
 import { Chip, Empty, Notice } from '../../ui/primitives';
-import { PlusLock } from '../settings/PlusLock';
 
 export function Splits({ a, units }: { a: ActivityDTO; units: Units }) {
   const splits = units === 'imperial' ? a.stats.splitsImperial : a.stats.splits;
@@ -82,21 +82,17 @@ export function BestEfforts({ a }: { a: ActivityDTO }) {
   );
 }
 
-interface Effort { id: string; segmentId: string; name: string; elapsedS: number; distanceM: number; flagged: boolean; isPersonalBest: boolean }
-
-export function SegmentEfforts({ a, synced }: { a: ActivityDTO; synced: boolean }) {
-  const q = useQuery({ queryKey: ['efforts', a.id], queryFn: () => api<Effort[]>(`/activities/${a.id}/efforts`), enabled: synced && a.hasStream });
-  if (!synced || !a.hasStream) return null;
-  if (!q.data?.length) return null;
+export function SegmentEfforts({ a }: { a: ActivityDTO; synced?: boolean }) {
+  const q = useQuery({ queryKey: ['efforts', a.id], queryFn: () => effortsForActivity(a.id), enabled: a.hasStream });
+  if (!a.hasStream || !q.data?.length) return null;
   return (
     <section className="card" aria-labelledby="segs">
       <div className="card__head"><h2 id="segs" className="section-title">Segmentos</h2></div>
       <div className="list">
-        {q.data.map((e) => (
-          <Link key={e.id} to={`/segmentos/${e.segmentId}`} className="list-item">
+        {q.data.map((e, i) => (
+          <Link key={e.segmentId + i} to={`/segmentos/${e.segmentId}`} className="list-item">
             <span className="list-item__icon"><Award aria-hidden /></span>
             <span className="grow ellipsis">{e.name}</span>
-            {e.isPersonalBest && <Chip tone="accent">Récord personal</Chip>}
             {e.flagged && <Chip tone="warning">No válido</Chip>}
             <strong className="num">{formatDuration(e.elapsedS)}</strong>
           </Link>
@@ -106,22 +102,25 @@ export function SegmentEfforts({ a, synced }: { a: ActivityDTO; synced: boolean 
   );
 }
 
-export function HrZones({ a, synced }: { a: ActivityDTO; synced: boolean }) {
-  const { can, session } = useSession();
-  const isOwner = session?.user.id === a.owner.id;
-  const enabled = isOwner && synced && a.avgHr != null && can('training.zones');
-  const q = useQuery({ queryKey: ['zones', a.id], queryFn: () => api<{ zones: Array<{ index: number; label: string; min: number; max: number }>; seconds: number[] | null }>(`/activities/${a.id}/zones`), enabled, retry: false });
-  if (!isOwner || a.avgHr == null) return null;
+export function HrZones({ a }: { a: ActivityDTO; synced?: boolean }) {
+  const me = useMe();
+  const q = useQuery({
+    queryKey: ['zones', a.id, me.hrMax],
+    enabled: a.avgHr != null && me.hrMax != null,
+    queryFn: async () => {
+      const stored = await userDb().streams.get(a.id);
+      const zones = hrZones(me.hrMax!);
+      const seconds = stored?.stream.hr ? timeInZones(stored.stream.t, stored.stream.hr, zones, stored.stream.seg) : null;
+      return { zones, seconds };
+    },
+  });
+  if (a.avgHr == null) return null;
   return (
     <section className="card" aria-labelledby="zones">
       <div className="card__head"><h2 id="zones" className="section-title row"><HeartPulse width={16} height={16} /> Zonas de frecuencia cardíaca</h2></div>
       <div className="card__body stack">
-        {!can('training.zones') ? (
-          <PlusLock feature="training.zones" compact />
-        ) : !synced ? (
-          <Notice icon={Lock}>Disponible cuando la actividad se sincronice.</Notice>
-        ) : q.error ? (
-          <Notice icon={HeartPulse} tone="warning">{(q.error as Error).message} <Link className="link" to="/ajustes">Ir al perfil</Link></Notice>
+        {me.hrMax == null ? (
+          <Notice icon={HeartPulse} tone="warning">Indica tu frecuencia cardíaca máxima en el <Link className="link" to="/ajustes">perfil</Link> para ver las zonas.</Notice>
         ) : q.data?.seconds ? (
           q.data.zones.map((z, i) => {
             const total = q.data!.seconds!.reduce((x, y) => x + y, 0) || 1;
@@ -134,7 +133,7 @@ export function HrZones({ a, synced }: { a: ActivityDTO; synced: boolean }) {
             );
           })
         ) : (
-          <Empty icon={HeartPulse} title="Calculando…" />
+          <Empty icon={HeartPulse} title="Sin datos de frecuencia cardíaca" />
         )}
       </div>
     </section>

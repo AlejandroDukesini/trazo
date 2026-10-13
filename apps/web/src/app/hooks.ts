@@ -1,6 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { recorder } from '../data/recorder';
-import { sync } from '../data/sync';
 import { useSession } from '../data/session';
 import type { Units } from '@trazo/core';
 
@@ -19,7 +18,6 @@ export function useOnline() {
   );
 }
 
-export const useSyncStatus = () => useSyncExternalStore(sync.subscribe, sync.getSnapshot, sync.getSnapshot);
 export const useRecorder = () => useSyncExternalStore(recorder.subscribe, recorder.getSnapshot, recorder.getSnapshot);
 
 export function useMediaQuery(q: string) {

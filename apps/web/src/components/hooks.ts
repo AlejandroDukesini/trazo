@@ -1,24 +1,8 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { periodStart, type GoalPeriod } from '@trazo/core';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef } from 'react';
-import { api } from '../data/api';
 import { userDb } from '../data/db';
-import type { ActivityDTO, LocalActivity, Page } from '../data/types';
-
-/** Lista paginada por cursor con carga al llegar al final. */
-export function usePaged<T>(key: unknown[], path: string, enabled = true) {
-  const q = useInfiniteQuery({
-    queryKey: key,
-    enabled,
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) =>
-      api<Page<T>>(`${path}${path.includes('?') ? '&' : '?'}limit=20${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
-    getNextPageParam: (last) => last.nextCursor,
-  });
-  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
-  return { ...q, items };
-}
+import type { ActivityDTO, LocalActivity } from '../data/types';
 
 export function useSentinel(onVisible: () => void, enabled: boolean) {
   const ref = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 import { SPORTS, SPORT_KEYS, formatDistance, formatDuration, formatElevation, formatSportSpeed } from '@trazo/core';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, CloudOff, FileUp, GitCompare, ListChecks, Plus, Search } from 'lucide-react';
+import { FileUp, GitCompare, ListChecks, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useDocumentTitle, useIsDesktop, useUnits } from '../../app/hooks';
@@ -9,8 +9,7 @@ import { useSentinel } from '../../components/hooks';
 import { formatDate } from '../../components/format';
 import { userDb } from '../../data/db';
 import type { LocalActivity } from '../../data/types';
-import { useSession } from '../../data/session';
-import { Button, Chip, Empty, Input, Select, Skeleton } from '../../ui/primitives';
+import { Button, Empty, Input, Select, Skeleton } from '../../ui/primitives';
 import { SportIcon } from '../../ui/SportIcon';
 
 const PAGE = 40;
@@ -20,13 +19,11 @@ export default function HistoryPage() {
   const units = useUnits();
   const desktop = useIsDesktop();
   const navigate = useNavigate();
-  const { can } = useSession();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   const sport = params.get('deporte') ?? '';
   const range = params.get('periodo') ?? '';
   const length = params.get('distancia') ?? '';
-  const state = params.get('estado') ?? '';
   const [limit, setLimit] = useState(PAGE);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -38,14 +35,12 @@ export default function HistoryPage() {
     const since = range ? Date.now() - Number(range) * 86_400_000 : 0;
     const [minD, maxD] = length ? length.split('-').map(Number) : [0, Infinity];
     return all.filter((a) =>
-      !a.deleted &&
       (!sport || a.sport === sport) &&
       (!since || Date.parse(a.startedAt) >= since) &&
       a.distanceM >= (minD ?? 0) * 1000 && a.distanceM < (maxD ?? Infinity) * 1000 &&
-      (!state || (state === 'error' ? a.syncState === 'error' || a.syncState === 'conflict' : a.syncState === state)) &&
       (!needle || a.name.toLowerCase().includes(needle) || a.description.toLowerCase().includes(needle)),
     );
-  }, [all, q, sport, range, length, state]);
+  }, [all, q, sport, range, length]);
 
   const shown = filtered.slice(0, limit);
   const sentinel = useSentinel(() => setLimit((l) => l + PAGE), filtered.length > limit);
@@ -68,7 +63,7 @@ export default function HistoryPage() {
         <div className="row wrap">
           {selected.length === 2 && (
             <Button icon={GitCompare} onClick={() => navigate(`/actividades/comparar?a=${selected[0]}&b=${selected[1]}`)}>
-              Comparar {!can('activities.compare') && <Chip tone="plus">Plus</Chip>}
+              Comparar
             </Button>
           )}
           <Button icon={FileUp} onClick={() => navigate('/actividades/importar')}>Importar o añadir</Button>
@@ -98,7 +93,6 @@ export default function HistoryPage() {
           <option value="21-50">21–50 km</option>
           <option value="50-100000">Más de 50 km</option>
         </Select>
-        {state && <Button size="sm" variant="ghost" onClick={() => setParam('estado', '')}>Quitar filtro de estado</Button>}
       </div>
 
       {!all && <div className="stack"><Skeleton h={64} /><Skeleton h={64} /><Skeleton h={64} /></div>}
@@ -116,7 +110,7 @@ export default function HistoryPage() {
             <thead>
               <tr>
                 <th style={{ width: 36 }}><span className="visually-hidden">Seleccionar para comparar</span></th>
-                <th>Fecha</th><th>Actividad</th><th className="right">Distancia</th><th className="right">Tiempo</th><th className="right">Ritmo / vel.</th><th className="right">Desnivel</th><th />
+                <th>Fecha</th><th>Actividad</th><th className="right">Distancia</th><th className="right">Tiempo</th><th className="right">Ritmo / vel.</th><th className="right">Desnivel</th>
               </tr>
             </thead>
             <tbody>
@@ -129,12 +123,6 @@ export default function HistoryPage() {
       <div ref={sentinel} />
     </div>
   );
-}
-
-function SyncBadge({ a }: { a: LocalActivity }) {
-  if (a.syncState === 'synced') return null;
-  if (a.syncState === 'pending') return <span title="Pendiente de sincronizar"><CloudOff width={16} height={16} className="subtle" /></span>;
-  return <span title={a.lastError ?? 'Conflicto'} style={{ color: 'var(--danger)' }}><AlertTriangle width={16} height={16} /></span>;
 }
 
 function Row({ a, units, selected, onToggle }: { a: LocalActivity; units: 'metric' | 'imperial'; selected: boolean; onToggle: () => void }) {
@@ -151,7 +139,6 @@ function Row({ a, units, selected, onToggle }: { a: LocalActivity; units: 'metri
       <td className="right">{formatDuration(a.movingS)}</td>
       <td className="right">{a.distanceM > 0 ? formatSportSpeed(a.sport, a.avgSpeed, units) : '–'}</td>
       <td className="right">{formatElevation(a.elevGainM, units)}</td>
-      <td><SyncBadge a={a} /></td>
     </tr>
   );
 }
