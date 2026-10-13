@@ -1,0 +1,10 @@
+import { execFileSync } from 'node:child_process';
+const ADB = `${process.env.ANDROID_HOME}/platform-tools/adb.exe`;
+const adb = (...a) => execFileSync(ADB, a, { encoding: 'utf8' }).trim();
+const pid = adb('shell', 'pidof', 'app.trazo.mobile');
+adb('forward', 'tcp:9333', `localabstract:webview_devtools_remote_${pid}`);
+const t = (await (await fetch('http://127.0.0.1:9333/json')).json()).find((x) => x.type === 'page');
+const ws = new WebSocket(t.webSocketDebuggerUrl);
+await new Promise((r) => ws.addEventListener('open', r, { once: true }));
+ws.addEventListener('message', (e) => { console.log(JSON.parse(e.data).result?.result?.value); ws.close(); });
+ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: process.argv[2] ?? 'location.pathname + " | " + document.body.innerText.slice(0, 600)', returnByValue: true } }));

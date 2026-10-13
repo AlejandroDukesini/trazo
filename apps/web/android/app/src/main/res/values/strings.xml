@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Trazo</string>
+    <string name="title_activity_main">Trazo</string>
+    <string name="package_name">app.trazo.mobile</string>
+    <string name="custom_url_scheme">app.trazo.mobile</string>
+</resources>

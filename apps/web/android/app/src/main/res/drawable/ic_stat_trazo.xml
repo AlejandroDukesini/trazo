@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono monocromo de la notificación de grabación (marca Trazo). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.6" android:strokeLineCap="round"
+        android:pathData="M11.5,34.5c4.5,-0.4 7,-3.6 9.3,-8.2 2.6,-5.1 5.6,-10.3 13.7,-11.6" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M35.5,14.5m-4.6,0a4.6,4.6 0,1 1,9.2 0a4.6,4.6 0,1 1,-9.2 0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M11.5,34.5m-3.6,0a3.6,3.6 0,1 1,7.2 0a3.6,3.6 0,1 1,-7.2 0" />
+</vector>

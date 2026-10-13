@@ -1,0 +1,103 @@
+/*
+ * Trazo · tokens de diseño.
+ * Base monocromática grafito + acento "trazo" (turquesa eléctrico). Tema claro y oscuro con el
+ * mismo vocabulario; los componentes solo usan variables, nunca colores literales.
+ */
+:root {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Escala tipográfica (1.2) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.625rem;
+  --text-3xl: 2.125rem;
+  --text-metric: clamp(2.5rem, 9vw, 4.5rem);
+
+  /* Espaciado (base 4) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --radius-full: 999px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  --nav-h: 64px;
+  --sidebar-w: 248px;
+  --content-max: 1180px;
+
+  /* Colores de datos (gráficos), comunes a ambos temas con ajuste de luminosidad abajo */
+  --data-pace: var(--accent);
+  --data-hr: #f0476b;
+  --data-power: #f2a53a;
+  --data-cadence: #9b7bf0;
+  --data-ele: var(--text-3);
+
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e6e9ee;
+  --border: #e2e5ea;
+  --border-strong: #cdd2da;
+  --text: #11151b;
+  --text-2: #4a525e;
+  --text-3: #687180;
+  --accent: #0a8571;
+  --accent-strong: #076756;
+  --accent-soft: #dcf5f0;
+  --on-accent: #ffffff;
+  --danger: #d63a4b;
+  --danger-soft: #fde8ea;
+  --warning: #8f5e12;
+  --warning-soft: #fdf3dd;
+  --success: #188a5a;
+  --focus: #0a8571;
+  --shadow-1: 0 1px 2px rgba(17, 21, 27, 0.06), 0 1px 1px rgba(17, 21, 27, 0.04);
+  --shadow-2: 0 8px 24px rgba(17, 21, 27, 0.08), 0 2px 6px rgba(17, 21, 27, 0.05);
+  --shadow-3: 0 24px 64px rgba(17, 21, 27, 0.16);
+  --scrim: rgba(12, 15, 20, 0.42);
+  --skeleton: linear-gradient(90deg, #eceef2 0%, #f5f6f8 50%, #eceef2 100%);
+}
+
+/* Oscuro: grafito azulado con capas de elevación, nunca negro puro. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d1015;
+  --bg-elev: #13171e;
+  --surface: #151a21;
+  --surface-2: #1c222b;
+  --surface-3: #252c37;
+  --border: #232a34;
+  --border-strong: #323a46;
+  --text: #edf0f4;
+  --text-2: #a9b1bd;
+  --text-3: #858e9b;
+  --accent: #2fe0c2;
+  --accent-strong: #5cebd3;
+  --accent-soft: rgba(47, 224, 194, 0.12);
+  --on-accent: #062520;
+  --danger: #ff6b7a;
+  --danger-soft: rgba(255, 107, 122, 0.12);
+  --warning: #f2c063;
+  --warning-soft: rgba(242, 192, 99, 0.12);
+  --success: #4fd497;
+  --focus: #2fe0c2;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 28px 70px rgba(0, 0, 0, 0.6);
+  --scrim: rgba(3, 5, 8, 0.66);
+  --skeleton: linear-gradient(90deg, #1a2029 0%, #222934 50%, #1a2029 100%);
+  --data-hr: #ff6b88;
+  --data-power: #ffbf5c;
+  --data-cadence: #b49cff;
+}
